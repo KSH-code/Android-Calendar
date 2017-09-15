@@ -3,5 +3,9 @@
     <color name="colorPrimary">#3F51B5</color>
     <color name="colorPrimaryDark">#303F9F</color>
     <color name="colorAccent">#FF4081</color>
-    <color name="colorBorder">#d7d7d7</color>
+    <color name="colorBorder">#D7D7D7</color>
+    <color name="colorWhite">#FFF</color>
+    <color name="colorTouchedDate">#FFF</color>
+    <color name="colorNormalBlack">#232323</color>
+    <color name="colorDate">#232323</color>
 </resources>

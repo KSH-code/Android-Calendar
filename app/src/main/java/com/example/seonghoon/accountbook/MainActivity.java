@@ -1,8 +1,12 @@
 package com.example.seonghoon.accountbook;
 
+import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.support.design.widget.TabLayout;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.content.res.ResourcesCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 
@@ -28,9 +32,16 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static Drawable mTouchedDrawable = null;//
+    private static int mDateColor = 0;
+    private static int mTouchedDateColor = 0;
     /**
      * The {@link android.support.v4.view.PagerAdapter} that will provide
      * fragments for each of the sections. We use a
@@ -40,7 +51,6 @@ public class MainActivity extends AppCompatActivity {
      * {@link android.support.v4.app.FragmentStatePagerAdapter}.
      */
     private SectionsPagerAdapter mSectionsPagerAdapter;
-
     /**
      * The {@link ViewPager} that will host the section contents.
      */
@@ -64,6 +74,12 @@ public class MainActivity extends AppCompatActivity {
         TabLayout tabLayout = (TabLayout) findViewById(R.id.tabs);
         tabLayout.setupWithViewPager(mViewPager);
 
+        if (mTouchedDrawable == null)
+            mTouchedDrawable = ResourcesCompat.getDrawable(getResources(), R.drawable.touched_date, null);
+        if (mTouchedDateColor == 0)
+            mTouchedDateColor = ResourcesCompat.getColor(getResources(), R.color.colorTouchedDate, null);
+        if (mDateColor == 0)
+            mDateColor = ResourcesCompat.getColor(getResources(), R.color.colorDate, null);
 //        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
 //        fab.setOnClickListener(new View.OnClickListener() {
 //            @Override
@@ -108,7 +124,8 @@ public class MainActivity extends AppCompatActivity {
          * fragment.
          */
         private static long time;
-        private static ArrayList<TextView> touchedText = new ArrayList<>();
+        private static HashMap<String, HashMap> mTouchedText = new HashMap<>();// String yyyyMM을 이용해 key를 사용할 것이다. value는 touchedTextData
+        private static HashMap<TextView, Drawable> mTouchedTextData = new HashMap<>();
 
         public PlaceholderFragment() {
             time = System.currentTimeMillis();
@@ -178,8 +195,21 @@ public class MainActivity extends AppCompatActivity {
                 Button prev = (Button) getView().findViewById(R.id.prev);
                 prev.setOnClickListener(new ButtonClickListner(false));
                 // Next 버튼 리스너 연결
-                Button next = (Button) getView().findViewById(R.id.next);
+                Button next = getView().findViewById(R.id.next);
                 next.setOnClickListener(new ButtonClickListner(true));
+
+                // TextClickListner를 붙임
+                GridLayout gridLayout = getView().findViewById(R.id.calendarView);
+                LinearLayout linearLayout;
+                TextView textView;
+                for (int i = 1; i < gridLayout.getChildCount(); i++) {
+                    linearLayout = (LinearLayout) gridLayout.getChildAt(i);
+                    for (int j = 0; j < linearLayout.getChildCount(); j++) {
+                        textView = (TextView) linearLayout.getChildAt(j);
+                        textView.setOnClickListener(new TextClickListner());
+                    }
+                }
+
             }
         }
 
@@ -191,7 +221,6 @@ public class MainActivity extends AppCompatActivity {
          * </pre>
          */
         private void drawDate() {
-            DateFormat df = new SimpleDateFormat("yyyy-MM");
             GridLayout gridLayout = (GridLayout) getView().findViewById(R.id.calendarView);
             LinearLayout linearLayout;
             TextView textView;
@@ -200,7 +229,7 @@ public class MainActivity extends AppCompatActivity {
             today.setDate(1);
             int day = today.getDay();
             TextView textDate = (TextView) getView().findViewById(R.id.date);
-            textDate.setText(df.format(today));
+            textDate.setText(Util.getInstance().getDateFormat(getTime(), "yyyy-MM"));
             for (int i = 1; i < gridLayout.getChildCount(); i++) {
                 linearLayout = (LinearLayout) gridLayout.getChildAt(i);
                 for (int j = 0; j < linearLayout.getChildCount(); j++) {
@@ -212,6 +241,40 @@ public class MainActivity extends AppCompatActivity {
                         textView.setText(date + "");
                         date++;
                     }
+                }
+            }
+            if (mTouchedTextData.size() > 0) {
+                Iterator it = mTouchedTextData.entrySet().iterator();
+                Map.Entry<TextView, Drawable> text;
+                while (it.hasNext()) {
+                    text = (Map.Entry<TextView, Drawable>) it.next();
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                        text.getKey().setBackground(mTouchedDrawable);
+                        text.getKey().setTextColor(mTouchedDateColor);
+                    }
+                }
+            }
+        }
+
+        /**
+         * 터치됐던, 오브젝트들 모두 원 상태로
+         * <pre>
+         *  <b>History:</b>
+         *      KSH-Code, 1.0, 2017.09.15
+         * </pre>
+         */
+        private void clearTouched() {
+            TextView textView;
+            Drawable drawable;
+            Iterator it = mTouchedTextData.entrySet().iterator();
+            Map.Entry<TextView, Drawable> temp;
+            while (it.hasNext()) {
+                temp = (Map.Entry<TextView, Drawable>) it.next();
+                textView = temp.getKey();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                    drawable = temp.getValue();
+                    textView.setBackground(drawable);
+                    textView.setTextColor(mDateColor);
                 }
             }
         }
@@ -235,10 +298,61 @@ public class MainActivity extends AppCompatActivity {
                 this.next = next;
             }
 
+            /**
+             * 다음달이나 이전달로 넘어간다.
+             */
             @Override
             public void onClick(View view) {
+                //touchedText 데이터 저장 (년월별로)
+                String date = Util.getInstance().getDefaultDateFormat(getTime());
+                mTouchedText.remove(date);// 이전 데이터 저장은 삭제
+
+                mTouchedText.put(Util.getInstance().getDefaultDateFormat(getTime()), (HashMap) mTouchedTextData.clone());
+                clearTouched();//하이라이팅 초기화
+
+                mTouchedTextData.clear();
+
+
                 setTime(next);//날짜를 셋팅
+
+                //셋팅된 날짜로 불러와서 리스트에 삽입
+                HashMap temp = mTouchedText.get(Util.getInstance().getDefaultDateFormat(getTime()));
+                if (temp != null)
+                    mTouchedTextData = temp;
+
                 drawDate();//달력에 draw
+            }
+        }
+
+        /**
+         * 달력안에 날짜를 클릭할 시 발생
+         */
+        class TextClickListner implements View.OnClickListener {
+
+
+            /**
+             * 날짜를 클릭하면 하이라이팅 또는 하이라이팅 해제
+             */
+            @Override
+            public void onClick(View view) {
+                TextView textView = (TextView) view;
+                if (textView.getText().toString().length() > 0) {
+                    Drawable drawable = mTouchedTextData.get(textView);
+                    if (drawable == null) {
+                        mTouchedTextData.put(textView, textView.getBackground());
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                            textView.setBackground(mTouchedDrawable);
+                            textView.setTextColor(mTouchedDateColor);
+                        }
+                    } else {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                            textView.setBackground(drawable);
+                            textView.setTextColor(mDateColor);
+                        }
+                        mTouchedTextData.remove(textView);
+
+                    }
+                }
             }
         }
     }
